@@ -3,7 +3,10 @@ package redis.crud;
     import org.junit.Test;
     import redis.clients.jedis.Jedis;
     import redis.clients.jedis.JedisPool;
+
+    import java.security.Timestamp;
     import java.util.HashMap;
+    import java.util.List;
     import java.util.Map;
     import static org.junit.Assert.assertEquals;
     import static org.junit.Assert.assertNotNull;
@@ -21,6 +24,7 @@ public class RedisMetrics {
 
 
     @Test
+    // check the value of some metric satisfies expected limits
     public void info() {
         Jedis jedis = pool.getResource();
         String info = jedis.info();
@@ -32,7 +36,7 @@ public class RedisMetrics {
         //assert the usedCpu is less then a maximum value
         System.out.println("used_cpu_sys " + usedCpu);
         Float ucedCpuF = Float.parseFloat(usedCpu);
-        assertTrue(ucedCpuF< 150); 
+        assertTrue(ucedCpuF < 150);
 
     }
 
@@ -45,4 +49,38 @@ public class RedisMetrics {
         };
         return map;
     }
+
+    @Test
+    //check the last successfully saving of the dataset on disk was made less then 1 second ago
+    public void lastsave() throws InterruptedException {
+        Jedis jedis = pool.getResource();
+        long lastSavedTimestamp = jedis.lastsave();
+        long currentTimestamp = System.currentTimeMillis()/1000;
+        assertTrue(currentTimestamp - lastSavedTimestamp < 1000 );
+    }
+
+    @Test
+    //Retrieve the configuration of a running Redis server as a list of key-value pairs.
+    public void configGet() {
+        Jedis jedis = pool.getResource();
+        List<String> redisProperties = jedis.configGet("*");
+        assertNotNull(redisProperties);
+        System.out.println(redisProperties);
+
+        Map<String, String> propertyMap = parsConfig(redisProperties);
+        String prop = propertyMap.get("hash-max-ziplist-entries");
+        System.out.println("hash-max-ziplist-entries " + prop);
+        Float propertyF = Float.parseFloat(prop);
+        assertTrue(propertyF == 512);
+    }
+    public static Map<String, String> parsConfig(List<String> redisProperties) {
+        Map<String, String> resultsMap = new HashMap<String, String>();
+        for ( int j=0; j < redisProperties.size()-1; j++) {
+            resultsMap.put((String) redisProperties.get(j), redisProperties.get(j+1));
+            j++;
+        }
+
+        return resultsMap;
+    }
+
 }
